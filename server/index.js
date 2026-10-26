@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+
 const Movie = require("./Movie");
 const Booking = require("./Booking");
 
@@ -9,60 +10,215 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const PORT = process.env.PORT || 5000;
+
+// Dynamic Seat Prices
+const SEAT_PRICES = {
+  A: 400, // Recliner VIP
+  B: 280, // Prime Extra Legroom (Best Seller)
+  C: 280, // Prime Extra Legroom (Best Seller)
+  D: 180, // Classic Standard
+  E: 180, // Classic Standard
+  F: 180, // Classic Standard
+};
+
+// Root Health Check
 app.get("/", (req, res) => {
-  res.send("IMovies API chal raha hai");
+  res.json({ status: "ok", message: "iMovies Cinema API is running smoothly!" });
 });
 
+// 1. Fetch All Movies
 app.get("/api/movies", async (req, res) => {
-  const movies = await Movie.find();
-  res.json(movies);
+  try {
+    const movies = await Movie.find().sort({ rating: -1 });
+    res.json(movies);
+  } catch (error) {
+    console.error("Fetch movies error:", error);
+    res.status(500).json({ message: "Unable to fetch movies." });
+  }
 });
 
+// 2. Fetch Single Movie by ID
 app.get("/api/movies/:id", async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid movie ID." });
+    }
     const movie = await Movie.findById(req.params.id);
-    if (!movie) return res.status(404).json({ message: "Movie not found" });
+    if (!movie) {
+      return res.status(404).json({ message: "Movie not found." });
+    }
     res.json(movie);
-  } catch (err) {
-    res.status(400).json({ message: "Invalid id" });
+  } catch (error) {
+    console.error("Fetch movie error:", error);
+    res.status(500).json({ message: "Unable to fetch movie." });
   }
 });
 
+// 3. Get Already Booked Seats for a specific Show, Date & Theatre
+app.get("/api/booked-seats", async (req, res) => {
+  try {
+    const { movieId, showDate, showtime, theatre } = req.query;
+    if (!movieId || !showDate || !showtime) {
+      return res.json([]);
+    }
+
+    const query = {
+      movie: movieId,
+      showDate,
+      showtime,
+      bookingStatus: "confirmed",
+    };
+    if (theatre) query.theatre = theatre;
+
+    const bookings = await Booking.find(query).select("seatNumbers");
+    const bookedSeats = bookings.flatMap((b) => b.seatNumbers);
+    res.json(bookedSeats);
+  } catch (error) {
+    console.error("Fetch booked seats error:", error);
+    res.status(500).json({ message: "Error fetching seat availability." });
+  }
+});
+
+// 4. Create New Booking
 app.post("/api/bookings", async (req, res) => {
   try {
-    const { movie, name, email, showtime, seats } = req.body;
-    const m = await Movie.findById(movie);
-    if (!m) return res.status(404).json({ message: "Movie not found" });
-    const booking = await Booking.create({
-      movie, name, email, showtime, seats,
-      totalPrice: m.price * seats,
+    const {
+      movie,
+      name,
+      phone,
+      email,
+      theatre,
+      showDate,
+      showtime,
+      seatNumbers,
+    } = req.body;
+
+    if (
+      !movie ||
+      !name ||
+      !name.trim() ||
+      !phone ||
+      !phone.trim() ||
+      !email ||
+      !email.trim() ||
+      !showDate ||
+      !showtime ||
+      !Array.isArray(seatNumbers) ||
+      seatNumbers.length === 0
+    ) {
+      return res.status(400).json({
+        message: "Please fill in all details (Name, Phone, Email, Showtime & Seats).",
+      });
+    }
+
+    if (!mongoose.isValidObjectId(movie)) {
+      return res.status(400).json({ message: "Invalid movie ID." });
+    }
+
+    // Check movie existence
+    const selectedMovie = await Movie.findById(movie);
+    if (!selectedMovie) {
+      return res.status(404).json({ message: "Selected movie not found." });
+    }
+
+    // Check collision for already booked seats
+    const existingBooking = await Booking.findOne({
+      movie,
+      showDate,
+      showtime,
+      theatre: theatre || "PVR Cinemas, City Center",
+      bookingStatus: "confirmed",
+      seatNumbers: { $in: seatNumbers },
     });
-    res.status(201).json(booking);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
+
+    if (existingBooking) {
+      return res.status(409).json({
+        message: "One or more of your chosen seats were just booked. Please pick other seats.",
+      });
+    }
+
+    // Calculate verified total
+    const totalPrice = seatNumbers.reduce((sum, seat) => {
+      const row = seat.charAt(0).toUpperCase();
+      return sum + (SEAT_PRICES[row] || 200);
+    }, 0);
+
+    // Unique Booking Code e.g. IMV-74921
+    const bookingCode = "IMV-" + Math.floor(100000 + Math.random() * 900000);
+
+    const booking = await Booking.create({
+      movie,
+      bookingCode,
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase(),
+      theatre: theatre || "PVR Cinemas, City Center",
+      showDate,
+      showtime,
+      seats: seatNumbers.length,
+      seatNumbers,
+      totalPrice,
+      paymentStatus: "demo_success",
+      bookingStatus: "confirmed",
+    });
+
+    await booking.populate("movie");
+
+    return res.status(201).json({
+      message: "Ticket Booked Successfully!",
+      booking,
+    });
+  } catch (error) {
+    console.error("Booking error:", error);
+    return res.status(500).json({
+      message: "Unable to process booking. Please try again.",
+    });
   }
 });
 
+// 5. Fetch User's Bookings by Email or Phone
 app.get("/api/bookings", async (req, res) => {
-  const { email } = req.query;
-  const bookings = await Booking.find({ email }).populate("movie");
-  res.json(bookings);
+  try {
+    const { email, phone } = req.query;
+    const filter = {};
+
+    if (email) filter.email = email.trim().toLowerCase();
+    if (phone) filter.phone = phone.trim();
+
+    if (!email && !phone) {
+      // Return recent 15 bookings if no filter
+      const recent = await Booking.find().populate("movie").sort({ createdAt: -1 }).limit(15);
+      return res.json(recent);
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate("movie")
+      .sort({ createdAt: -1 });
+
+    res.json(bookings);
+  } catch (error) {
+    console.error("Fetch bookings error:", error);
+    res.status(500).json({ message: "Unable to fetch bookings." });
+  }
 });
 
-app.get("/api/seed", async (req, res) => {
-  await Movie.deleteMany();
-  await Movie.insertMany([
-    { title: "Inception", description: "A thief enters dreams to steal secrets.", genre: "Sci-Fi", language: "English", duration: 148, poster: "https://image.tmdb.org/t/p/w500/ljsZTbVsrQSqZgWeep2B1QiDKuh.jpg", showtimes: ["10:00 AM", "2:00 PM", "7:00 PM"], price: 250 },
-    { title: "3 Idiots", description: "Three friends and their journey through engineering college.", genre: "Comedy", language: "Hindi", duration: 170, poster: "https://image.tmdb.org/t/p/w500/66A9MqXOyVFCssoloscw79z8Tew.jpg", showtimes: ["11:00 AM", "3:00 PM", "8:00 PM"], price: 200 },
-    { title: "Interstellar", description: "Explorers travel through a wormhole to save humanity.", genre: "Sci-Fi", language: "English", duration: 169, poster: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg", showtimes: ["10:30 AM", "4:00 PM", "9:00 PM"], price: 300 },
-  ]);
-  res.send("Movies added");
-});
+async function startServer() {
+  try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is missing in server/.env");
+    }
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log("DB error:", err.message));
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("✅ MongoDB connected successfully to Atlas!");
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+    app.listen(PORT, () => {
+      console.log(`🎬 iMovies Backend running at http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
