@@ -1,16 +1,19 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const Movie = require("./Movie");
 const Booking = require("./Booking");
+const User = require("./User");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || "imovies_jwt_super_secret_key_2026";
 
 // Dynamic Seat Prices
 const SEAT_PRICES = {
@@ -27,7 +30,81 @@ app.get("/", (req, res) => {
   res.json({ status: "ok", message: "iMovies Cinema API is running smoothly!" });
 });
 
-// 1. Fetch All Movies
+// ==========================================
+// 1. AUTHENTICATION ROUTES (JWT & BCRYPT)
+// ==========================================
+
+// Register
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Please provide Name, Email, and Password." });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await User.findOne({ email: cleanEmail });
+    if (existing) {
+      return res.status(400).json({ message: "An account with this email already exists." });
+    }
+
+    const user = await User.create({
+      name: name.trim(),
+      email: cleanEmail,
+      password,
+      role: role === "admin" ? "admin" : "user",
+    });
+
+    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+
+    res.status(201).json({
+      message: "Registered successfully!",
+      token,
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+    });
+  } catch (error) {
+    console.error("Register error:", error);
+    res.status(500).json({ message: "Registration failed. Try again." });
+  }
+});
+
+// Login
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "Please provide Email and Password." });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+
+    res.json({
+      message: "Logged in successfully!",
+      token,
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Login failed. Try again." });
+  }
+});
+
+// ==========================================
+// 2. MOVIE ROUTES (CRUD & SEARCH)
+// ==========================================
+
+// Fetch All Movies
 app.get("/api/movies", async (req, res) => {
   try {
     const movies = await Movie.find().sort({ rating: -1 });
@@ -38,7 +115,7 @@ app.get("/api/movies", async (req, res) => {
   }
 });
 
-// 2. Fetch Single Movie by ID
+// Fetch Single Movie by ID
 app.get("/api/movies/:id", async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
@@ -55,7 +132,65 @@ app.get("/api/movies/:id", async (req, res) => {
   }
 });
 
-// 3. Get Already Booked Seats for a specific Show, Date & Theatre
+// Admin: Add New Movie
+app.post("/api/movies", async (req, res) => {
+  try {
+    const { title, description, genre, language, duration, poster, backdrop, price, rating, certificate, showtimes, theatres } = req.body;
+    if (!title) {
+      return res.status(400).json({ message: "Movie title is required." });
+    }
+
+    const movie = await Movie.create({
+      title,
+      description: description || "Experience the thrill in cinema halls.",
+      genre: genre || "Action / Drama",
+      language: language || "Hindi / English",
+      duration: duration || 150,
+      poster: poster || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+      backdrop: backdrop || "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80",
+      price: price || 200,
+      rating: rating || 8.5,
+      certificate: certificate || "UA 16+",
+      showtimes: showtimes || ["10:30 AM", "02:15 PM", "06:00 PM", "09:45 PM"],
+      theatres: theatres || [
+        {
+          name: "PVR: Superplex, Vegas Mall",
+          distance: "1.2 km away",
+          transport: "5 min by 🛺 E-Rickshaw",
+          formats: ["IMAX 3D", "Dolby Atmos 7.1"],
+        },
+      ],
+    });
+
+    res.status(201).json({ message: "Movie added successfully!", movie });
+  } catch (error) {
+    console.error("Add movie error:", error);
+    res.status(500).json({ message: "Unable to add movie." });
+  }
+});
+
+// Admin: Delete Movie
+app.delete("/api/movies/:id", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid movie ID." });
+    }
+    const deleted = await Movie.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Movie not found." });
+    }
+    res.json({ message: "Movie deleted successfully!" });
+  } catch (error) {
+    console.error("Delete movie error:", error);
+    res.status(500).json({ message: "Unable to delete movie." });
+  }
+});
+
+// ==========================================
+// 3. BOOKING ROUTES (CREATE, SEATS, CANCEL)
+// ==========================================
+
+// Get Already Booked Seats for a specific Show, Date & Theatre
 app.get("/api/booked-seats", async (req, res) => {
   try {
     const { movieId, showDate, showtime, theatre } = req.query;
@@ -80,7 +215,7 @@ app.get("/api/booked-seats", async (req, res) => {
   }
 });
 
-// 4. Create New Booking
+// Create New Booking
 app.post("/api/bookings", async (req, res) => {
   try {
     const {
@@ -116,7 +251,6 @@ app.post("/api/bookings", async (req, res) => {
       return res.status(400).json({ message: "Invalid movie ID." });
     }
 
-    // Check movie existence
     const selectedMovie = await Movie.findById(movie);
     if (!selectedMovie) {
       return res.status(404).json({ message: "Selected movie not found." });
@@ -144,7 +278,6 @@ app.post("/api/bookings", async (req, res) => {
       return sum + (SEAT_PRICES[row] || 200);
     }, 0);
 
-    // Unique Booking Code e.g. IMV-74921
     const bookingCode = "IMV-" + Math.floor(100000 + Math.random() * 900000);
 
     const booking = await Booking.create({
@@ -177,7 +310,7 @@ app.post("/api/bookings", async (req, res) => {
   }
 });
 
-// 5. Fetch User's Bookings by Email or Phone
+// Fetch User's Bookings
 app.get("/api/bookings", async (req, res) => {
   try {
     const { email, phone } = req.query;
@@ -187,7 +320,6 @@ app.get("/api/bookings", async (req, res) => {
     if (phone) filter.phone = phone.trim();
 
     if (!email && !phone) {
-      // Return recent 15 bookings if no filter
       const recent = await Booking.find().populate("movie").sort({ createdAt: -1 }).limit(15);
       return res.json(recent);
     }
@@ -200,6 +332,32 @@ app.get("/api/bookings", async (req, res) => {
   } catch (error) {
     console.error("Fetch bookings error:", error);
     res.status(500).json({ message: "Unable to fetch bookings." });
+  }
+});
+
+// Booking Cancellation API (Frees up seats)
+app.put("/api/bookings/:id/cancel", async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid booking ID." });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found." });
+    }
+
+    if (booking.bookingStatus === "cancelled") {
+      return res.status(400).json({ message: "This booking is already cancelled." });
+    }
+
+    booking.bookingStatus = "cancelled";
+    await booking.save();
+
+    res.json({ message: "Booking cancelled successfully! Refund initiated.", booking });
+  } catch (error) {
+    console.error("Cancel booking error:", error);
+    res.status(500).json({ message: "Unable to cancel booking." });
   }
 });
 

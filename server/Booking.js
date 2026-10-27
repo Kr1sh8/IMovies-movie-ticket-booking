@@ -70,4 +70,9 @@ const bookingSchema = new mongoose.Schema({
   },
 });
 
+// Indexes for query optimization
+bookingSchema.index({ movie: 1, showDate: 1, showtime: 1 });
+bookingSchema.index({ email: 1 });
+bookingSchema.index({ bookingCode: 1 });
+
 module.exports = mongoose.model("Booking", bookingSchema);

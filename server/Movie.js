@@ -23,4 +23,9 @@ const movieSchema = new mongoose.Schema({
   price: { type: Number, default: 180 },
 });
 
+// Indexes for high performance search & filtering
+movieSchema.index({ title: 1 });
+movieSchema.index({ genre: 1 });
+movieSchema.index({ rating: -1 });
+
 module.exports = mongoose.model("Movie", movieSchema);

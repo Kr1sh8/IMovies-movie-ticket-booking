@@ -91,8 +91,8 @@ body {
 
 .nav-search {
   flex: 1;
-  max-width: 440px;
-  margin: 0 24px;
+  max-width: 380px;
+  margin: 0 20px;
   position: relative;
 }
 
@@ -125,7 +125,7 @@ body {
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .city-pill {
@@ -150,7 +150,7 @@ body {
   background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
@@ -984,6 +984,79 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.btn-cancel-ticket {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--cinema-red);
+  border: 1px solid var(--cinema-red);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel-ticket:hover {
+  background: var(--cinema-red);
+  color: #fff;
+}
+
+.status-badge-cancelled {
+  display: inline-block;
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--cinema-red);
+  border: 1px solid var(--cinema-red);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+/* Floating Toast Notifications */
+.toast-notification {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999;
+  background: #1e293b;
+  border: 1px solid var(--letterboxd-green);
+  color: #fff;
+  padding: 14px 22px;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  animation: toastSlideUp 0.3s ease-out;
+}
+
+@keyframes toastSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Auth / Admin Tabs */
+.auth-tab-btn {
+  flex: 1;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.auth-tab-btn.active {
+  color: var(--letterboxd-green);
+  border-bottom-color: var(--letterboxd-green);
 }
 
 @media (max-width: 768px) {
