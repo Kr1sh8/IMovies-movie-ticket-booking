@@ -1,12 +1,8 @@
 # 🎬 iMovies — Modern Movie Ticket Booking & Cinema Multiplex Platform
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-brightgreen?style=for-the-badge&logo=vercel)](https://imovies-movie-ticket-booking-drab.vercel.app)
-[![React](https://img.shields.io/badge/Frontend-React_19-blue?style=for-the-badge&logo=react)](https://react.dev/)
-[![Node.js](https://img.shields.io/badge/Backend-Node.js_%26_Express-green?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/Database-MongoDB_Atlas-darkgreen?style=for-the-badge&logo=mongodb)](https://www.mongodb.com/atlas)
-
-> 🚀 **Live Hosted Website:** [https://imovies-movie-ticket-booking-drab.vercel.app](https://imovies-movie-ticket-booking-drab.vercel.app)  
 > **Full Stack MERN Capstone Project** developed for the **Experiential Learning Program (SmartBridge & MongoDB)** in partnership with **nasscom FutureSkills Prime**.
+>
+> 🚀 **Live Hosted Website:** [https://imovies-movie-ticket-booking-drab.vercel.app](https://imovies-movie-ticket-booking-drab.vercel.app)
 
 ![iMovies Banner](https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80)
 
