@@ -4,7 +4,7 @@
 >
 > 🚀 **Live Hosted Website:** [https://imovies-movie-ticket-booking-drab.vercel.app](https://imovies-movie-ticket-booking-drab.vercel.app)
 
-![iMovies Banner](./banner.jpg)
+![iMovies Banner](https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80)
 
 ---
 
